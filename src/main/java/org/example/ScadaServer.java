@@ -1,5 +1,6 @@
 package org.example;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -10,6 +11,8 @@ import org.java_websocket.handshake.ClientHandshake;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -19,16 +22,19 @@ public class ScadaServer extends WebSocketServer {
     private static final Map<String, ControllerData> controllers = new ConcurrentHashMap<>();
     private static final int WS_PORT = 8080;
     private static final int REST_PORT = 8081;
+    private static final String SAVE_FILE = "controllers.json";
 
     public ScadaServer(int port) {
         super(new InetSocketAddress(port));
     }
 
     public static void main(String[] args) throws IOException {
-        // Инициализация контроллеров
-        controllers.put("ctrl1", new ControllerData());
-        controllers.put("ctrl2", new ControllerData());
-        controllers.put("ctrl3", new ControllerData());
+        loadFromFile();
+        if (controllers.isEmpty()) {
+            controllers.put("controller 1", new ControllerData());
+            controllers.put("controller 2", new ControllerData());
+            controllers.put("controller 3", new ControllerData());
+        }
 
         ScadaServer server = new ScadaServer(WS_PORT);
         server.start();
@@ -118,6 +124,7 @@ public class ScadaServer extends WebSocketServer {
             if (data != null) {
                 data.temperature = temp;
                 data.level = level;
+                saveToFile();
                 sendResponse(exchange, 200, "{\"status\": \"ok\"}");
             } else {
                 sendResponse(exchange, 404, "{\"error\": \"controller not found\"}");
@@ -140,6 +147,7 @@ public class ScadaServer extends WebSocketServer {
             ControllerData data = controllers.get(id);
             if (data != null) {
                 data.enabled = enable;
+                saveToFile();
                 sendResponse(exchange, 200, "{\"status\": \"ok\"}");
             } else {
                 sendResponse(exchange, 404, "{\"error\": \"controller not found\"}");
@@ -183,6 +191,34 @@ public class ScadaServer extends WebSocketServer {
         exchange.sendResponseHeaders(code, bytes.length);
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(bytes);
+        }
+    }
+
+    private static void saveToFile() {
+        try (FileWriter writer = new FileWriter(SAVE_FILE)) {
+            writer.write(controllersToJson());
+        } catch (IOException e) {
+            System.err.println("Ошибка при сохранении: " + e.getMessage());
+        }
+    }
+
+    private static void loadFromFile() {
+        File file = new File(SAVE_FILE);
+        if (!file.exists()) return;
+
+        try {
+            String content = new String(Files.readAllBytes(Paths.get(SAVE_FILE)));
+            Map<String, Object> map = new ObjectMapper().readValue(content, Map.class);
+            for (String key : map.keySet()) {
+                Map<String, Object> d = (Map<String, Object>) map.get(key);
+                ControllerData cd = new ControllerData();
+                cd.temperature = ((Number) d.get("temperature")).doubleValue();
+                cd.level = ((Number) d.get("level")).doubleValue();
+                cd.enabled = (Boolean) d.get("enabled");
+                controllers.put(key, cd);
+            }
+        } catch (IOException e) {
+            System.err.println("Ошибка при загрузке: " + e.getMessage());
         }
     }
 

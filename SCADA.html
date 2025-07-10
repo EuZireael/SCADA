@@ -4,22 +4,89 @@
     <meta charset="UTF-8">
     <title>SCADA Управление</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        h1 { font-size: 24px; }
-        .controller {
-            border: 1px solid #ccc;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 15px;
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f4f6f9;
+            padding: 30px;
+            color: #333;
         }
-        button {
-            margin: 5px;
-            padding: 5px 15px;
+
+        h1 {
+            font-size: 26px;
+            margin-bottom: 20px;
+        }
+
+        .controller {
+            background-color: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            transition: transform 0.2s ease;
+        }
+
+        .controller:hover {
+            transform: translateY(-2px);
+        }
+
+        .controller h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 20px;
+        }
+
+        .controller p {
+            margin: 6px 0;
             font-size: 16px;
         }
+
         .status {
-            margin-top: 5px;
             font-weight: bold;
+        }
+
+        .enabled {
+            color: #28a745;
+        }
+
+        .disabled {
+            color: #dc3545;
+        }
+
+        button {
+            padding: 8px 18px;
+            margin-right: 10px;
+            font-size: 15px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .btn-on {
+            background-color: #b8b4b4;
+            color: #fff;
+        }
+
+        .btn-on:hover {
+            background-color: #218838;
+        }
+
+        .btn-off {
+            background-color: #b8b4b4;
+            color: #fff;
+        }
+
+        .btn-off:hover {
+            background-color: #c82333;
+        }
+
+        #connectionStatus {
+            font-size: 15px;
+            margin-top: 25px;
         }
     </style>
 </head>
@@ -35,18 +102,18 @@
 
     ws.onopen = () => {
         status.textContent = "✅ Подключено через WebSocket";
-        status.style.color = "green";
+        status.style.color = "#28a745";
     };
 
     ws.onclose = () => {
         status.textContent = "❌ WebSocket отключён. Повтор через 10 сек...";
-        status.style.color = "red";
+        status.style.color = "#dc3545";
         setTimeout(() => location.reload(), 10000);
     };
 
     ws.onerror = () => {
         status.textContent = "⚠️ Ошибка WebSocket";
-        status.style.color = "orange";
+        status.style.color = "#ffc107";
     };
 
     ws.onmessage = (event) => {
@@ -65,14 +132,14 @@
         if (!controllers[id]) {
             const div = document.createElement("div");
             div.className = "controller";
-            div.id = `ctrl-${id}`;
+            div.id = `controller-${id}`;
             div.innerHTML = `
                 <h3>${id}</h3>
                 <p>🌡 Температура: <span id="${id}-temp">--</span> °C</p>
                 <p>💧 Уровень: <span id="${id}-level">--</span> %</p>
                 <p class="status">🔌 Статус: <span id="${id}-enabled">--</span></p>
-                <button onclick="setState('${id}', true)">✅ Включить</button>
-                <button onclick="setState('${id}', false)">❌ Выключить</button>
+                <button class="btn-on" onclick="setState('${id}', true)">✅ Включить</button>
+                <button class="btn-off" onclick="setState('${id}', false)">❌ Выключить</button>
             `;
             container.appendChild(div);
             controllers[id] = true;
@@ -80,7 +147,9 @@
 
         document.getElementById(`${id}-temp`).textContent = data.temperature.toFixed(2);
         document.getElementById(`${id}-level`).textContent = data.level.toFixed(2);
-        document.getElementById(`${id}-enabled`).textContent = data.enabled ? "Включен" : "Выключен";
+        const enabledSpan = document.getElementById(`${id}-enabled`);
+        enabledSpan.textContent = data.enabled ? "Включен" : "Выключен";
+        enabledSpan.className = data.enabled ? "enabled" : "disabled";
     }
 
     function setState(id, enable) {
@@ -89,9 +158,7 @@
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: `id=${encodeURIComponent(id)}&enable=${enable}`
         }).then(res => {
-            if (res.ok) {
-                console.log(`${id} -> ${enable ? "включен" : "выключен"}`);
-            } else {
+            if (!res.ok) {
                 alert("Не удалось изменить состояние контроллера");
             }
         }).catch(err => {
